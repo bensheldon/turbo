@@ -386,6 +386,43 @@ test("preserves permanent elements", async ({ page }) => {
   assert.ok(await strictElementEquals(permanentElement, await page.locator("#permanent")))
 })
 
+test("preserves event listeners on permanent elements", async ({ page }) => {
+  // Add event listener to permanent element
+  await page.evaluate(() => {
+    const element = document.getElementById("permanent")
+    let clickCount = 0
+    element.addEventListener("click", () => {
+      clickCount++
+      element.setAttribute("data-click-count", clickCount.toString())
+    })
+    // Store the original function to verify it's still there
+    element._testHandler = () => clickCount
+  })
+
+  // Click the element to verify the listener works
+  await page.click("#permanent")
+  assert.equal(await page.getAttribute("#permanent", "data-click-count"), "1")
+
+  // Navigate to another page
+  await page.click("#permanent-element-link")
+  await nextEventNamed(page, "turbo:render")
+
+  // Verify element identity is preserved
+  const permanentElement = await page.locator("#permanent")
+  assert.ok(await strictElementEquals(permanentElement, await page.locator("#permanent")))
+
+  // Click the element again to verify the event listener still works
+  await page.click("#permanent")
+  assert.equal(await page.getAttribute("#permanent", "data-click-count"), "2")
+
+  // Verify the original function reference is preserved
+  const handlerStillExists = await page.evaluate(() => {
+    const element = document.getElementById("permanent")
+    return typeof element._testHandler === "function" && element._testHandler() === 2
+  })
+  assert.ok(handlerStillExists, "event listener function reference preserved")
+})
+
 test("restores focus during page rendering when transposing the activeElement", async ({ page }) => {
   await page.press("#permanent-input", "Enter")
   await nextBody(page)
