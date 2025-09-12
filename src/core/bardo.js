@@ -9,23 +9,27 @@ export class Bardo {
   constructor(delegate, permanentElementMap) {
     this.delegate = delegate
     this.permanentElementMap = permanentElementMap
+    this.temporaryContainer = null
   }
 
   enter() {
+    this.createTemporaryContainer()
     for (const id in this.permanentElementMap) {
       const [currentPermanentElement, newPermanentElement] = this.permanentElementMap[id]
       this.delegate.enteringBardo(currentPermanentElement, newPermanentElement)
       this.replaceNewPermanentElementWithPlaceholder(newPermanentElement)
+      // Move current permanent element to temporary container to preserve it during page replacement
+      this.movePermanentElementToTemporaryContainer(currentPermanentElement)
     }
   }
 
   leave() {
     for (const id in this.permanentElementMap) {
       const [currentPermanentElement] = this.permanentElementMap[id]
-      this.replaceCurrentPermanentElementWithClone(currentPermanentElement)
       this.replacePlaceholderWithPermanentElement(currentPermanentElement)
       this.delegate.leavingBardo(currentPermanentElement)
     }
+    this.removeTemporaryContainer()
   }
 
   replaceNewPermanentElementWithPlaceholder(permanentElement) {
@@ -33,14 +37,31 @@ export class Bardo {
     permanentElement.replaceWith(placeholder)
   }
 
-  replaceCurrentPermanentElementWithClone(permanentElement) {
-    const clone = permanentElement.cloneNode(true)
-    permanentElement.replaceWith(clone)
+  movePermanentElementToTemporaryContainer(permanentElement) {
+    // Move element to temporary container to keep it connected to DOM
+    // but out of the way during page replacement
+    this.temporaryContainer.appendChild(permanentElement)
   }
 
   replacePlaceholderWithPermanentElement(permanentElement) {
     const placeholder = this.getPlaceholderById(permanentElement.id)
     placeholder?.replaceWith(permanentElement)
+  }
+
+  createTemporaryContainer() {
+    // Create a temporary container in the document to store permanent elements
+    // This keeps them connected to the DOM during the transition
+    this.temporaryContainer = document.createElement("div")
+    this.temporaryContainer.style.display = "none"
+    this.temporaryContainer.setAttribute("data-turbo-permanent-container", "")
+    document.documentElement.appendChild(this.temporaryContainer)
+  }
+
+  removeTemporaryContainer() {
+    if (this.temporaryContainer && this.temporaryContainer.parentNode) {
+      this.temporaryContainer.parentNode.removeChild(this.temporaryContainer)
+      this.temporaryContainer = null
+    }
   }
 
   getPlaceholderById(id) {
